@@ -15,9 +15,12 @@ jobs:
 
       - name: Find and extract project ZIP
         run: |
-          ZIP_FILE="$(find . -maxdepth 2 -type f -name '*.zip' -print -quit)"
+          ZIP_FILE="MotionStudioAI_ReadyToBuild.zip"
+          if [ ! -f "$ZIP_FILE" ]; then
+            ZIP_FILE="$(find . -maxdepth 2 -type f -name '*.zip' -print -quit)"
+          fi
           if [ -z "$ZIP_FILE" ]; then
-            echo "No project ZIP found. Upload MotionStudioAI_ReadyToBuild.zip to the repository first."
+            echo "No project ZIP found."
             exit 1
           fi
           mkdir -p extracted
@@ -40,28 +43,30 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Force Java and Kotlin compile targets to 17 in project files
+      - name: Align Java and Kotlin targets in extracted project
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import re
           root = Path("extracted")
-          patterns = [
-              (r"VERSION_1_8", "VERSION_17"),
-              (r"VERSION_8", "VERSION_17"),
-              (r'(jvmTarget\\s*=\\s*["\\'])1\\.8(["\\'])', r'\\g<1>17\\g<2>'),
-              (r'(sourceCompatibility\\s*=\\s*["\\'])1\\.8(["\\'])', r'\\g<1>17\\g<2>'),
-              (r'(targetCompatibility\\s*=\\s*["\\'])1\\.8(["\\'])', r'\\g<1>17\\g<2>'),
+          replacements = [
+              ("VERSION_1_8", "VERSION_17"),
+              ("VERSION_8", "VERSION_17"),
+              ('jvmTarget = "1.8"', 'jvmTarget = "17"'),
+              ("jvmTarget = '1.8'", "jvmTarget = '17'"),
+              ('sourceCompatibility = "1.8"', 'sourceCompatibility = "17"'),
+              ("sourceCompatibility = '1.8'", "sourceCompatibility = '17'"),
+              ('targetCompatibility = "1.8"', 'targetCompatibility = "17"'),
+              ("targetCompatibility = '1.8'", "targetCompatibility = '17'"),
           ]
           for path in root.rglob("*"):
               if path.is_file() and path.name in ("build.gradle", "build.gradle.kts"):
-                  text = path.read_text(errors="ignore")
-                  original = text
-                  for pattern, replacement in patterns:
-                      text = re.sub(pattern, replacement, text)
-                  if text != original:
-                      path.write_text(text)
-                      print("Patched:", path)
+                  original = path.read_text(errors="ignore")
+                  updated = original
+                  for before, after in replacements:
+                      updated = updated.replace(before, after)
+                  if updated != original:
+                      path.write_text(updated)
+                      print("Updated Java/Kotlin target in", path)
           PY
 
       - name: Build debug APK
