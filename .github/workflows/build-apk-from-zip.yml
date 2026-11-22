@@ -75,8 +75,21 @@ jobs:
                       print("Updated Java/Kotlin target in", path)
           PY
 
+      - name: Force Java compile tasks to JVM 17
+        run: |
+          cat > "$RUNNER_TEMP/force-jvm17.gradle" <<'EOF'
+          allprojects {
+              afterEvaluate {
+                  tasks.withType(org.gradle.api.tasks.compile.JavaCompile).configureEach {
+                      sourceCompatibility = "17"
+                      targetCompatibility = "17"
+                  }
+              }
+          }
+          EOF
+
       - name: Build debug APK
-        run: gradle -p "$PROJECT_DIR" assembleDebug
+        run: gradle -I "$RUNNER_TEMP/force-jvm17.gradle" -p "$PROJECT_DIR" assembleDebug
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
