@@ -53,45 +53,33 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          root = Path("extracted")
-          replacements = [
-              ("VERSION_1_8", "VERSION_17"),
-              ("VERSION_8", "VERSION_17"),
-              ('jvmTarget = "1.8"', 'jvmTarget = "17"'),
-              ("jvmTarget = '1.8'", "jvmTarget = '17'"),
-              ('sourceCompatibility = "1.8"', 'sourceCompatibility = "17"'),
-              ("sourceCompatibility = '1.8'", "sourceCompatibility = '17'"),
-              ('targetCompatibility = "1.8"', 'targetCompatibility = "17"'),
-              ("targetCompatibility = '1.8'", "targetCompatibility = '17'"),
-          ]
-          for path in root.rglob("*"):
-              if path.is_file() and path.name in ("build.gradle", "build.gradle.kts"):
-                  original = path.read_text(errors="ignore")
-                  updated = original
-                  for before, after in replacements:
-                      updated = updated.replace(before, after)
-                  if updated != original:
-                      path.write_text(updated)
-                      print("Updated Java/Kotlin target in", path)
-          PY
+          import re
 
-      - name: Force Android Java and Kotlin targets to JVM 17
-        run: |
-          cat > "$RUNNER_TEMP/force-jvm17.gradle" <<'EOF'
-          gradle.projectsEvaluated {
-              allprojects { project ->
-                  def androidExtension = project.extensions.findByName("android")
-                  if (androidExtension != null) {
-                      androidExtension.compileOptions.sourceCompatibility = JavaVersion.VERSION_17
-                      androidExtension.compileOptions.targetCompatibility = JavaVersion.VERSION_17
-                  }
-                  project.tasks.withType(org.gradle.api.tasks.compile.JavaCompile).configureEach {
-                      sourceCompatibility = JavaVersion.VERSION_17.toString()
-                      targetCompatibility = JavaVersion.VERSION_17.toString()
-                  }
-              }
-          }
-          EOF
+          root = Path("extracted")
+          for path in root.rglob("*"):
+              if not path.is_file() or path.name not in ("build.gradle", "build.gradle.kts"):
+                  continue
+              original = path.read_text(errors="ignore")
+              updated = original
+
+              # Normalize Android Java compatibility declarations.
+              updated = re.sub(
+                  r'(?m)^(\s*(?:sourceCompatibility|targetCompatibility)\s*=\s*).*$',
+                  lambda m: m.group(1) + ('JavaVersion.VERSION_17' if path.suffix == ".gradle" else 'JavaVersion.VERSION_17'),
+                  updated
+              )
+
+              # Normalize Kotlin JVM target declarations in both DSL styles.
+              updated = re.sub(r'(?m)^(\s*jvmTarget\s*=\s*)["\'](?:1\.8|8|11|17)["\'].*$', r'\g<1>"17"', updated)
+              updated = updated.replace("VERSION_1_8", "VERSION_17")
+              updated = updated.replace("VERSION_8", "VERSION_17")
+              updated = updated.replace('JavaVersion.toVersion("1.8")', 'JavaVersion.VERSION_17')
+              updated = updated.replace("JavaVersion.toVersion('1.8')", "JavaVersion.VERSION_17")
+
+              if updated != original:
+                  path.write_text(updated)
+                  print("Updated Java/Kotlin target in", path)
+          PY
 
       - name: Build debug APK
         run: gradle -I "$RUNNER_TEMP/force-jvm17.gradle" -p "$PROJECT_DIR" assembleDebug
