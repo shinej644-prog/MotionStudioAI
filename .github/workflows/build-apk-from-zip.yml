@@ -40,13 +40,39 @@ jobs:
           echo "Found Gradle project at: $PROJECT_DIR"
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
-      - name: Inspect Android source before build
+      - name: Fix Kotlin local function order and inspect source
         run: |
           SOURCE_FILE="$PROJECT_DIR/app/src/main/java/com/motionstudio/ai/MainActivity.kt"
+          python3 - <<'PY'
+          from pathlib import Path
+          import sys
+
+          path = Path("PLACEHOLDER")
+          source_path = Path(__import__("os").environ["PROJECT_DIR"]) / "app/src/main/java/com/motionstudio/ai/MainActivity.kt"
+          source = source_path.read_text()
+          function = '''    fun openVideo(uri: Uri) {
+                  selectedVideo = uri
+                  player.setMediaItem(MediaItem.fromUri(uri)); player.prepare(); player.playWhenReady = false
+                  status = "Video selected — ready to preview"
+              }
+
+          '''
+          if source.count(function) != 1:
+              print("Expected exactly one openVideo function; refusing unsafe patch.")
+              sys.exit(1)
+          source = source.replace(function, "", 1)
+          anchor = "    val importPicker = rememberLauncherForActivityResult"
+          if source.count(anchor) != 1:
+              print("Could not find unique importPicker declaration; refusing unsafe patch.")
+              sys.exit(1)
+          source = source.replace(anchor, function + anchor, 1)
+          source_path.write_text(source)
+          print("Moved openVideo above importPicker callback.")
+          PY
           echo "===== MAINACTIVITY SOURCE (numbered) ====="
-          nl -ba "$SOURCE_FILE" | sed -n '1,360p'
+          nl -ba "$SOURCE_FILE" | sed -n '88,150p'
           echo "===== openVideo references ====="
-          grep -n -C 8 "openVideo" "$SOURCE_FILE" || true
+          grep -n -C 5 "openVideo" "$SOURCE_FILE"
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
