@@ -49,21 +49,29 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Align Java compiler task target to Kotlin JVM 17
+      - name: Align Kotlin JVM target with existing Java 8 target
         run: |
-          cat > "$RUNNER_TEMP/force-jvm17.gradle" <<'EOF'
-          allprojects {
-              tasks.withType(org.gradle.api.tasks.compile.JavaCompile).configureEach {
-                  sourceCompatibility = "17"
-                  targetCompatibility = "17"
+          cat > "$RUNNER_TEMP/align-jvm.gradle" <<'EOF'
+          gradle.projectsEvaluated {
+              allprojects { project ->
+                  project.tasks.matching { task ->
+                      task.name.startsWith("compile") && task.name.endsWith("Kotlin")
+                  }.configureEach { task ->
+                      if (task.hasProperty("kotlinOptions")) {
+                          task.kotlinOptions.jvmTarget = "1.8"
+                          task.doFirst {
+                              println "MotionStudioAI JVM alignment: Kotlin target = ${task.kotlinOptions.jvmTarget}; Java target = 1.8"
+                          }
+                      }
+                  }
               }
           }
           EOF
-          echo "Created JVM alignment init script:"
-          cat "$RUNNER_TEMP/force-jvm17.gradle"
+          echo "Created Kotlin JVM alignment script:"
+          cat "$RUNNER_TEMP/align-jvm.gradle"
 
       - name: Build debug APK
-        run: gradle --no-daemon --stacktrace -I "$RUNNER_TEMP/force-jvm17.gradle" -p "$PROJECT_DIR" assembleDebug
+        run: gradle --no-daemon --stacktrace -I "$RUNNER_TEMP/align-jvm.gradle" -p "$PROJECT_DIR" assembleDebug
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
