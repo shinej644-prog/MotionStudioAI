@@ -22,7 +22,7 @@ jobs:
           fi
           mkdir -p extracted
           unzip -q "$ZIP_FILE" -d extracted
-          PROJECT_DIR="$(find extracted -type f -name 'settings.gradle.kts' -printf '%h\n' -quit)"
+          PROJECT_DIR="$(find extracted -type f -name 'settings.gradle.kts' -printf '%h\\n' -quit)"
           if [ -z "$PROJECT_DIR" ]; then
             echo "Could not find settings.gradle.kts inside the uploaded ZIP."
             exit 1
@@ -40,29 +40,32 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Align Java and Kotlin targets to Java 17
+      - name: Force Java and Kotlin compile targets to 17 in project files
         run: |
-          cat > /tmp/force-java17.gradle <<'EOF'
-          gradle.projectsEvaluated {
-              allprojects {
-                  tasks.withType(org.gradle.api.tasks.compile.JavaCompile).configureEach {
-                      sourceCompatibility = '17'
-                      targetCompatibility = '17'
-                  }
-                  tasks.configureEach {
-                      if (name.toLowerCase().contains('kotlin')) {
-                          try {
-                              kotlinOptions.jvmTarget = '17'
-                          } catch (ignored) {
-                          }
-                      }
-                  }
-              }
-          }
-          EOF
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          root = Path("extracted")
+          patterns = [
+              (r"VERSION_1_8", "VERSION_17"),
+              (r"VERSION_8", "VERSION_17"),
+              (r'(jvmTarget\\s*=\\s*["\\'])1\\.8(["\\'])', r'\\g<1>17\\g<2>'),
+              (r'(sourceCompatibility\\s*=\\s*["\\'])1\\.8(["\\'])', r'\\g<1>17\\g<2>'),
+              (r'(targetCompatibility\\s*=\\s*["\\'])1\\.8(["\\'])', r'\\g<1>17\\g<2>'),
+          ]
+          for path in root.rglob("*"):
+              if path.is_file() and path.name in ("build.gradle", "build.gradle.kts"):
+                  text = path.read_text(errors="ignore")
+                  original = text
+                  for pattern, replacement in patterns:
+                      text = re.sub(pattern, replacement, text)
+                  if text != original:
+                      path.write_text(text)
+                      print("Patched:", path)
+          PY
 
       - name: Build debug APK
-        run: gradle -I /tmp/force-java17.gradle -p "$PROJECT_DIR" assembleDebug
+        run: gradle -p "$PROJECT_DIR" assembleDebug
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
