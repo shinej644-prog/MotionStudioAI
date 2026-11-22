@@ -82,7 +82,7 @@ jobs:
           PY
 
       - name: Build debug APK
-        run: gradle -I "$RUNNER_TEMP/force-jvm17.gradle" -p "$PROJECT_DIR" assembleDebug
+        run: gradle --no-daemon --stacktrace -p "$PROJECT_DIR" assembleDebug
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
