@@ -43,10 +43,20 @@ jobs:
       - name: Align Java and Kotlin targets to Java 17
         run: |
           cat > /tmp/force-java17.gradle <<'EOF'
-          allprojects {
-              tasks.withType(JavaCompile).configureEach {
-                  sourceCompatibility = '17'
-                  targetCompatibility = '17'
+          gradle.projectsEvaluated {
+              allprojects {
+                  tasks.withType(org.gradle.api.tasks.compile.JavaCompile).configureEach {
+                      sourceCompatibility = '17'
+                      targetCompatibility = '17'
+                  }
+                  tasks.configureEach {
+                      if (name.toLowerCase().contains('kotlin')) {
+                          try {
+                              kotlinOptions.jvmTarget = '17'
+                          } catch (ignored) {
+                          }
+                      }
+                  }
               }
           }
           EOF
