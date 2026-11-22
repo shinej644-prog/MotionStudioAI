@@ -25,7 +25,10 @@ jobs:
           fi
           mkdir -p extracted
           unzip -q "$ZIP_FILE" -d extracted
-          SETTINGS_FILE="$(find extracted -type f \\( -name 'settings.gradle' -o -name 'settings.gradle.kts' \\) -print -quit)"
+          SETTINGS_FILE="$(find extracted -type f -name 'settings.gradle.kts' -print -quit)"
+          if [ -z "$SETTINGS_FILE" ]; then
+            SETTINGS_FILE="$(find extracted -type f -name 'settings.gradle' -print -quit)"
+          fi
           if [ -z "$SETTINGS_FILE" ]; then
             echo "Could not find settings.gradle or settings.gradle.kts inside the uploaded ZIP."
             find extracted -maxdepth 4 -type f | head -80
